@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
 
-const DB_FILE = path.join(process.cwd(), ".jadeer_mock_db.json");
+const DB_FILE = process.env.VERCEL
+  ? path.join("/tmp", ".jadeer_mock_db.json")
+  : path.join(process.cwd(), ".jadeer_mock_db.json");
 
 interface DbSchema {
   leads: any[];
