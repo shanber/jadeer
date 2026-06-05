@@ -163,7 +163,7 @@ export async function analyzeResumeWithAI(
           ]
         }
       }
-    });
+    }, { apiVersion: "v1" });
 
     const jdContext = jobDescription
       ? `قارن النص بدقة مع هذا الوصف الوظيفي المحدد:\n"${jobDescription}"`
