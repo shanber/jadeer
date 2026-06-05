@@ -71,6 +71,34 @@ export default function Home() {
         throw new Error(result.error || "حدث خطأ أثناء تحليل السيرة الذاتية.");
       }
 
+      // Sync mock lead data to browser localStorage
+      if (result.leadData) {
+        try {
+          const localLeads = localStorage.getItem("jadeer_leads");
+          const leads = localLeads ? JSON.parse(localLeads) : [];
+          // Prevent duplicates
+          const filtered = leads.filter((l: any) => l.id !== result.leadId);
+          filtered.push(result.leadData);
+          localStorage.setItem("jadeer_leads", JSON.stringify(filtered));
+          
+          // Re-calculate statistics for dashboard
+          const total = filtered.length;
+          const scoresSum = filtered.reduce((sum: number, l: any) => sum + (l.overallScore || 0), 0);
+          const avg = total > 0 ? Math.round(scoresSum / total) : 0;
+          localStorage.setItem(
+            "jadeer_global_stats",
+            JSON.stringify({
+              totalAnalyses: total,
+              totalLeads: total,
+              averageScore: avg,
+              lastUpdatedAt: new Date().toISOString(),
+            })
+          );
+        } catch (storageErr) {
+          console.error("Local storage write failed:", storageErr);
+        }
+      }
+
       router.push(`/results/${result.leadId}`);
 
     } catch (err: any) {

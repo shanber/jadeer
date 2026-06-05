@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseResume } from "@/lib/parser";
 import { analyzeResumeWithAI } from "@/lib/gemini";
-import { dbAddDoc, dbUpdateDoc, storageUploadFile } from "@/lib/firebase";
+import { dbAddDoc, dbUpdateDoc, storageUploadFile, USING_MOCK_FIREBASE } from "@/lib/firebase";
+import { serverMockAddDoc, serverMockUpdateDoc } from "@/lib/mockDbServer";
+
+async function addLead(data: any): Promise<{ id: string }> {
+  if (!USING_MOCK_FIREBASE) {
+    return await dbAddDoc("leads", data);
+  } else {
+    return serverMockAddDoc("leads", data);
+  }
+}
+
+async function updateLead(id: string, data: any): Promise<void> {
+  if (!USING_MOCK_FIREBASE) {
+    await dbUpdateDoc("leads", id, data);
+  } else {
+    serverMockUpdateDoc("leads", id, data);
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +111,7 @@ export async function POST(req: NextRequest) {
       analysisStatus: "pending",
     };
 
-    const addResult = await dbAddDoc("leads", initialLeadData);
+    const addResult = await addLead(initialLeadData);
     createdLeadId = addResult.id;
     console.log(`[TRACE] [api/analyze] [Lead Creation] Success. Lead document pre-created with ID: "${createdLeadId}"`);
 
@@ -114,7 +131,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update document with resume URL and storage path
-    await dbUpdateDoc("leads", createdLeadId, {
+    await updateLead(createdLeadId, {
       resumeUrl,
       resumePath: storagePath,
     });
@@ -127,7 +144,7 @@ export async function POST(req: NextRequest) {
       console.log(`[TRACE] [api/analyze] [Analysis] Text extraction successful. Length: ${textContent.length} characters.`);
     } catch (parseError: any) {
       console.error("[TRACE] [api/analyze] [Analysis] Text extraction failed:", parseError);
-      await dbUpdateDoc("leads", createdLeadId, {
+      await updateLead(createdLeadId, {
         analysisStatus: "error",
         errorDetails: `Text parsing failed: ${parseError.message}`,
       });
@@ -140,7 +157,7 @@ export async function POST(req: NextRequest) {
     // Check if extracted text is too short
     if (textContent.trim().length < 150) {
       console.warn(`[TRACE] [api/analyze] [Analysis] Text extraction too short: ${textContent.trim().length} chars.`);
-      await dbUpdateDoc("leads", createdLeadId, {
+      await updateLead(createdLeadId, {
         analysisStatus: "error",
         errorDetails: "Extracted text content too short",
       });
@@ -162,7 +179,7 @@ export async function POST(req: NextRequest) {
 
       // 6. Update Lead with Complete Results
       console.log(`[TRACE] [api/analyze] [Save Result] Committing final analysis results to database for lead ID: "${createdLeadId}"...`);
-      await dbUpdateDoc("leads", createdLeadId, {
+      await updateLead(createdLeadId, {
         overallScore: analysisResult.overallScore,
         analysisResult,
         analysisStatus: "completed",
@@ -170,15 +187,27 @@ export async function POST(req: NextRequest) {
       });
       console.log(`[TRACE] [api/analyze] [Save Result] Database commit successful.`);
 
+      // Sync mock lead data back to browser client
+      const finalLeadData = {
+        ...initialLeadData,
+        id: createdLeadId,
+        resumeUrl,
+        resumePath: storagePath,
+        overallScore: analysisResult.overallScore,
+        analysisResult,
+        analysisStatus: "completed",
+      };
+
       console.log(`[TRACE] [api/analyze] [Redirect] Returning success response code. Lead ID: "${createdLeadId}"`);
       return NextResponse.json({
         success: true,
         leadId: createdLeadId,
+        leadData: USING_MOCK_FIREBASE ? finalLeadData : null,
       });
 
     } catch (aiError: any) {
       console.error("[TRACE] [api/analyze] [Analysis] AI Analysis execution failed:", aiError);
-      await dbUpdateDoc("leads", createdLeadId, {
+      await updateLead(createdLeadId, {
         analysisStatus: "error",
         errorDetails: `AI analysis failed: ${aiError.message}`,
       });

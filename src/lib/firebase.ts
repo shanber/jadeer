@@ -201,15 +201,20 @@ export async function dbAddDoc(collectionName: string, data: any): Promise<{ id:
     return { id: res.id };
   } else {
     if (typeof window === "undefined") {
-      const { serverMockAddDoc } = require("./mockDbServer");
-      return serverMockAddDoc(collectionName, data);
+      return { id: "mock_lead_" + Math.random().toString(36).substring(2, 11) };
     } else {
-      const res = await fetch("/api/mock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "addDoc", collectionName, data }),
-      });
-      return await res.json();
+      const localLeads = localStorage.getItem("jadeer_leads");
+      const leads = localLeads ? JSON.parse(localLeads) : [];
+      const id = "mock_lead_" + Math.random().toString(36).substring(2, 11);
+      const newDoc = {
+        ...data,
+        id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      leads.push(newDoc);
+      localStorage.setItem("jadeer_leads", JSON.stringify(leads));
+      return { id };
     }
   }
 }
@@ -218,15 +223,18 @@ export async function dbUpdateDoc(collectionName: string, id: string, data: any)
   if (isFirebaseConfigured) {
     await realUpdateDoc(doc(realDb, collectionName, id), data);
   } else {
-    if (typeof window === "undefined") {
-      const { serverMockUpdateDoc } = require("./mockDbServer");
-      serverMockUpdateDoc(collectionName, id, data);
-    } else {
-      await fetch("/api/mock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "updateDoc", collectionName, id, data }),
-      });
+    if (typeof window !== "undefined") {
+      const localLeads = localStorage.getItem("jadeer_leads");
+      const leads = localLeads ? JSON.parse(localLeads) : [];
+      const index = leads.findIndex((l: any) => l.id === id);
+      if (index !== -1) {
+        leads[index] = {
+          ...leads[index],
+          ...data,
+          updatedAt: new Date().toISOString(),
+        };
+        localStorage.setItem("jadeer_leads", JSON.stringify(leads));
+      }
     }
   }
 }
@@ -249,16 +257,22 @@ export async function dbGetDoc(collectionName: string, id: string): Promise<{ ex
         id: res.id,
       };
     } else {
-      const res = await fetch("/api/mock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getDoc", collectionName, id }),
-      });
-      const data = await res.json();
+      const localLeads = localStorage.getItem("jadeer_leads");
+      if (localLeads) {
+        const leads = JSON.parse(localLeads);
+        const lead = leads.find((l: any) => l.id === id);
+        if (lead) {
+          return {
+            exists: () => true,
+            data: () => lead,
+            id,
+          };
+        }
+      }
       return {
-        exists: () => data.exists,
-        data: () => data.data,
-        id: data.id,
+        exists: () => false,
+        data: () => null,
+        id,
       };
     }
   }
@@ -282,17 +296,15 @@ export async function dbGetDocs(collectionName: string): Promise<{ docs: Array<{
         size: list.length,
       };
     } else {
-      const res = await fetch("/api/mock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "getDocs", collectionName }),
-      });
-      const body = await res.json();
-      const list = body.docs || [];
+      const localLeads = localStorage.getItem("jadeer_leads");
+      const leads = localLeads ? JSON.parse(localLeads) : [];
+      const sorted = leads.sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       return {
-        docs: list.map((item: any) => ({ id: item.id, data: () => item })),
-        empty: list.length === 0,
-        size: list.length,
+        docs: sorted.map((l: any) => ({ id: l.id, data: () => l })),
+        empty: sorted.length === 0,
+        size: sorted.length,
       };
     }
   }
