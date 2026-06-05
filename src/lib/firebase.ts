@@ -6,6 +6,7 @@ import {
   updateDoc as realUpdateDoc,
   getDoc as realGetDoc,
   getDocs as realGetDocs,
+  setDoc as realSetDoc,
   collection,
   doc,
 } from "firebase/firestore";
@@ -38,6 +39,24 @@ if (isFirebaseConfigured) {
   } catch (error) {
     console.error("Error initializing Firebase, falling back to mock:", error);
   }
+}
+
+export function generateReportId(): string {
+  const currentYear = new Date().getFullYear();
+  let randomNum = 0;
+  if (typeof window !== "undefined" && window.crypto) {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    randomNum = 10000 + (array[0] % 90000); // 10000 to 99999
+  } else {
+    try {
+      const crypto = require("crypto");
+      randomNum = crypto.randomInt(10000, 100000);
+    } catch (e) {
+      randomNum = Math.floor(10000 + Math.random() * 90000);
+    }
+  }
+  return `JDR-${currentYear}-${randomNum}`;
 }
 
 // Local mock storage system using localStorage
@@ -99,7 +118,7 @@ class MockFirestore {
   async addDoc(collectionName: string, data: any) {
     if (collectionName !== "leads") throw new Error("Mock only supports leads collection");
     const leads = this.getLeads();
-    const id = "mock_lead_" + Math.random().toString(36).substring(2, 11);
+    const id = generateReportId();
     const newDoc = {
       ...data,
       id,
@@ -180,12 +199,12 @@ class MockAuth {
 class MockStorage {
   async uploadBytes(ref: any, file: File | Blob) {
     return {
-      metadata: { fullPath: `mock-resumes/mock_file_${Date.now()}` },
+      metadata: { fullPath: `resumes/cv_${Date.now()}` },
       ref,
     };
   }
   async getDownloadURL(ref: any) {
-    return "/mock-resume-download-placeholder.pdf";
+    return "/resumes/download-placeholder.pdf";
   }
 }
 
@@ -196,16 +215,21 @@ export const USING_MOCK_FIREBASE = !isFirebaseConfigured;
 
 // Unified database helper methods
 export async function dbAddDoc(collectionName: string, data: any): Promise<{ id: string }> {
+  const id = collectionName === "leads" ? generateReportId() : Math.random().toString(36).substring(2, 11);
   if (isFirebaseConfigured) {
-    const res = await realAddDoc(collection(realDb, collectionName), data);
-    return { id: res.id };
+    if (collectionName === "leads") {
+      await realSetDoc(doc(realDb, collectionName, id), data);
+      return { id };
+    } else {
+      const res = await realAddDoc(collection(realDb, collectionName), data);
+      return { id: res.id };
+    }
   } else {
     if (typeof window === "undefined") {
-      return { id: "mock_lead_" + Math.random().toString(36).substring(2, 11) };
+      return { id };
     } else {
       const localLeads = localStorage.getItem("jadeer_leads");
       const leads = localLeads ? JSON.parse(localLeads) : [];
-      const id = "mock_lead_" + Math.random().toString(36).substring(2, 11);
       const newDoc = {
         ...data,
         id,
@@ -318,6 +342,6 @@ export async function storageUploadFile(filePath: string, fileBuffer: Buffer | B
     await realUpload(storageRef, fileBuffer instanceof Buffer ? fileBuffer : fileBuffer, options);
     return await realDownload(storageRef);
   } else {
-    return "/mock-resume-download-placeholder.pdf";
+    return "/resumes/download-placeholder.pdf";
   }
 }

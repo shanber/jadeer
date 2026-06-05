@@ -20,14 +20,97 @@ async function updateLead(id: string, data: any): Promise<void> {
   }
 }
 
+function validateAIResponse(result: any): boolean {
+  if (!result) {
+    console.error("AI Validation Failed: Response is null or undefined");
+    return false;
+  }
+
+  // 1. score must be number 0-100
+  if (typeof result.score !== "number" || result.score < 0 || result.score > 100) {
+    console.error("AI Validation Failed: score is not a number between 0 and 100", result.score);
+    return false;
+  }
+
+  // 2. strengths, weaknesses, recommendations must be arrays
+  if (!Array.isArray(result.strengths) || !Array.isArray(result.weaknesses) || !Array.isArray(result.recommendations)) {
+    console.error("AI Validation Failed: strengths, weaknesses, or recommendations is not an array");
+    return false;
+  }
+
+  // 3. suggestedService must be one of the approved services
+  const approvedServices = ["تحسين السيرة الذاتية", "تحسين ملف لينكد إن", "استشارة مهنية"];
+  if (!approvedServices.includes(result.suggestedService)) {
+    console.error("AI Validation Failed: suggestedService is not approved", result.suggestedService);
+    return false;
+  }
+
+  // 4. sub-scores must total 100 or less according to weights
+  const sub = result.subScores;
+  if (!sub) {
+    console.error("AI Validation Failed: subScores object is missing");
+    return false;
+  }
+
+  const weights = {
+    professionalSummary: 10,
+    experienceClarity: 20,
+    achievementsMetrics: 15,
+    atsKeywords: 20,
+    structureFormatting: 15,
+    skillsSection: 10,
+    educationCertifications: 5,
+    contactInformation: 5,
+  };
+
+  for (const [key, maxWeight] of Object.entries(weights)) {
+    const val = sub[key as keyof typeof weights];
+    if (typeof val !== "number" || val < 0 || val > maxWeight) {
+      console.error(`AI Validation Failed: subScore key '${key}' has invalid value ${val} (max ${maxWeight})`);
+      return false;
+    }
+  }
+
+  const sum =
+    sub.professionalSummary +
+    sub.experienceClarity +
+    sub.achievementsMetrics +
+    sub.atsKeywords +
+    sub.structureFormatting +
+    sub.skillsSection +
+    sub.educationCertifications +
+    sub.contactInformation;
+
+  if (sum !== result.score) {
+    console.error(`AI Validation Failed: sum of subScores (${sum}) does not equal overall score (${result.score})`);
+    return false;
+  }
+
+  return true;
+}
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   let createdLeadId = "";
+  const standardErrorMsg = "تعذر تحليل الملف حاليًا، يرجى المحاولة لاحقًا أو التواصل مع فريق جدير.";
   
   try {
     console.log("[TRACE] [api/analyze] Received analysis request.");
+
+    // Check GEMINI_API_KEY at startup
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.trim().length === 0) {
+      console.error("[TRACE] [api/analyze] GEMINI_API_KEY is missing. Rejecting request.");
+      return NextResponse.json(
+        {
+          success: false,
+          message: standardErrorMsg
+        },
+        { status: 503 }
+      );
+    }
+
     const formData = await req.formData();
     
     // Core parameters
@@ -51,7 +134,10 @@ export async function POST(req: NextRequest) {
     if (!file || !targetJob || !fullName || !email || !mobile) {
       console.warn("[TRACE] [api/analyze] Validation failed: missing parameters.");
       return NextResponse.json(
-        { error: "جميع الحقول الأساسية مطلوبة (الملف، الوظيفة المستهدفة، الاسم، البريد، رقم الجوال)" },
+        {
+          success: false,
+          message: "جميع الحقول الأساسية مطلوبة (الملف، الوظيفة المستهدفة، الاسم، البريد، رقم الجوال)"
+        },
         { status: 400 }
       );
     }
@@ -61,7 +147,10 @@ export async function POST(req: NextRequest) {
     if (file.size > maxSizeBytes) {
       console.warn(`[TRACE] [api/analyze] Validation failed: file size ${file.size} exceeds 10MB.`);
       return NextResponse.json(
-        { error: "حجم الملف يتجاوز الحد الأقصى المسموح به (10 ميجابايت)" },
+        {
+          success: false,
+          message: "حجم الملف يتجاوز الحد الأقصى المسموح به (10 ميجابايت)"
+        },
         { status: 400 }
       );
     }
@@ -75,7 +164,10 @@ export async function POST(req: NextRequest) {
     if (!allowedMimeTypes.includes(file.type)) {
       console.warn(`[TRACE] [api/analyze] Validation failed: file type ${file.type} not allowed.`);
       return NextResponse.json(
-        { error: "نوع الملف غير مدعوم. يرجى تحميل ملف بصيغة PDF أو DOCX فقط" },
+        {
+          success: false,
+          message: "نوع الملف غير مدعوم. يرجى تحميل ملف بصيغة PDF أو DOCX فقط"
+        },
         { status: 400 }
       );
     }
@@ -85,7 +177,10 @@ export async function POST(req: NextRequest) {
     if (!saudiPhoneRegex.test(mobile)) {
       console.warn(`[TRACE] [api/analyze] Validation failed: mobile format ${mobile} is invalid.`);
       return NextResponse.json(
-        { error: "رقم الجوال غير صحيح. يجب أن يتكون من 10 خانات ويبدأ بـ 05 أو 9665" },
+        {
+          success: false,
+          message: "رقم الجوال غير صحيح. يجب أن يتكون من 10 خانات ويبدأ بـ 05 أو 9665"
+        },
         { status: 400 }
       );
     }
@@ -128,7 +223,7 @@ export async function POST(req: NextRequest) {
       console.log(`[TRACE] [api/analyze] [Upload] Upload successful. Secured URL: ${resumeUrl}`);
     } catch (storageError) {
       console.error("[TRACE] [api/analyze] [Upload] WARNING: Storage upload failed:", storageError);
-      resumeUrl = "/mock-resume-download-placeholder.pdf"; // Fallback URL
+      resumeUrl = "/resumes/download-placeholder.pdf"; // Fallback URL
     }
 
     // Update document with resume URL and storage path
@@ -150,7 +245,10 @@ export async function POST(req: NextRequest) {
         errorDetails: `Text parsing failed: ${parseError.message}`,
       });
       return NextResponse.json(
-        { error: "فشل استخراج النصوص من السيرة الذاتية. يرجى التأكد من أن الملف نصي وليس عبارة عن صور ممسوحة ضوئياً" },
+        {
+          success: false,
+          message: "فشل استخراج النصوص من السيرة الذاتية. يرجى التأكد من أن الملف نصي وليس عبارة عن صور ممسوحة ضوئياً"
+        },
         { status: 422 }
       );
     }
@@ -163,7 +261,10 @@ export async function POST(req: NextRequest) {
         errorDetails: "Extracted text content too short",
       });
       return NextResponse.json(
-        { error: "النصوص المستخرجة من الملف قصيرة جداً. يرجى التأكد من تحميل سيرة ذاتية حقيقية تحتوي على تفاصيل خبراتك" },
+        {
+          success: false,
+          message: "النصوص المستخرجة من الملف قصيرة جداً. يرجى التأكد من تحميل سيرة ذاتية حقيقية تحتوي على تفاصيل خبراتك"
+        },
         { status: 400 }
       );
     }
@@ -176,13 +277,24 @@ export async function POST(req: NextRequest) {
         targetJob,
         jobDescription
       );
-      console.log(`[TRACE] [api/analyze] [Analysis] AI evaluation complete. Overall Score generated: ${analysisResult.overallScore}`);
+
+      // Validate the AI response server-side
+      const isValid = validateAIResponse(analysisResult);
+      if (!isValid) {
+        throw new Error("AI response failed structural or mathematical validation");
+      }
+
+      console.log(`[TRACE] [api/analyze] [Analysis] AI evaluation complete. Dynamic Score generated: ${analysisResult.score}`);
 
       // 6. Update Lead with Complete Results
       console.log(`[TRACE] [api/analyze] [Save Result] Committing final analysis results to database for lead ID: "${createdLeadId}"...`);
       await updateLead(createdLeadId, {
-        overallScore: analysisResult.overallScore,
-        analysisResult,
+        overallScore: analysisResult.score,
+        analysisResult: {
+          ...analysisResult,
+          overallScore: analysisResult.score,
+          improvements: analysisResult.weaknesses,
+        },
         analysisStatus: "completed",
         updatedAt: new Date().toISOString(),
       });
@@ -194,14 +306,25 @@ export async function POST(req: NextRequest) {
         id: createdLeadId,
         resumeUrl,
         resumePath: storagePath,
-        overallScore: analysisResult.overallScore,
-        analysisResult,
+        overallScore: analysisResult.score,
+        analysisResult: {
+          ...analysisResult,
+          overallScore: analysisResult.score,
+          improvements: analysisResult.weaknesses,
+        },
         analysisStatus: "completed",
       };
 
       console.log(`[TRACE] [api/analyze] [Redirect] Returning success response code. Lead ID: "${createdLeadId}"`);
       return NextResponse.json({
         success: true,
+        reportId: createdLeadId,
+        score: analysisResult.score,
+        level: analysisResult.level,
+        strengths: analysisResult.strengths,
+        weaknesses: analysisResult.weaknesses,
+        recommendations: analysisResult.recommendations,
+        suggestedService: analysisResult.suggestedService,
         leadId: createdLeadId,
         leadData: USING_MOCK_FIREBASE ? finalLeadData : null,
       });
@@ -213,7 +336,10 @@ export async function POST(req: NextRequest) {
         errorDetails: `AI analysis failed: ${aiError.message}`,
       });
       return NextResponse.json(
-        { error: "فشل تقييم السيرة الذاتية بواسطة الذكاء الاصطناعي. يرجى المحاولة مرة أخرى لاحقاً" },
+        {
+          success: false,
+          message: standardErrorMsg
+        },
         { status: 500 }
       );
     }
@@ -221,7 +347,10 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("[TRACE] [api/analyze] Fatal router exception occurred:", err);
     return NextResponse.json(
-      { error: `حدث خطأ فني غير متوقع: ${err.message}` },
+      {
+        success: false,
+        message: standardErrorMsg
+      },
       { status: 500 }
     );
   }

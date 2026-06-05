@@ -41,14 +41,31 @@ function writeDb(data: DbSchema) {
   }
 }
 
+function generateReportId(): string {
+  const currentYear = new Date().getFullYear();
+  let randomNum = 0;
+  try {
+    const crypto = require("crypto");
+    randomNum = crypto.randomInt(10000, 100000); // 10000 to 99999
+  } catch (e) {
+    randomNum = Math.floor(10000 + Math.random() * 90000);
+  }
+  return `JDR-${currentYear}-${randomNum}`;
+}
+
 export function serverMockAddDoc(collectionName: string, data: any) {
   console.log(`[TRACE] [mockDbServer] addDoc on collection "${collectionName}"`);
   if (collectionName !== "leads") {
-    return { id: "mock_generic_" + Math.random().toString(36).substring(2, 9) };
+    try {
+      const crypto = require("crypto");
+      return { id: "gen_" + crypto.randomBytes(4).toString("hex") };
+    } catch (e) {
+      return { id: "gen_" + Math.random().toString(36).substring(2, 9) };
+    }
   }
 
   const db = readDb();
-  const id = "mock_lead_" + Math.random().toString(36).substring(2, 11);
+  const id = generateReportId();
   const newDoc = {
     ...data,
     id,

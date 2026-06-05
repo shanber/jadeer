@@ -69,7 +69,7 @@ export default function Home() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "حدث خطأ أثناء تحليل السيرة الذاتية.");
+        throw new Error(result.message || result.error || "حدث خطأ أثناء تحليل السيرة الذاتية.");
       }
 
       // Sync mock lead data to browser localStorage
