@@ -11,7 +11,7 @@ export default function Navbar() {
         {/* Left: Contact/Action Button (natively aligned left in RTL) */}
         <div className="flex items-center gap-3">
           <a
-            href="https://wa.me/966500000000"
+            href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "966554060424"}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs md:text-sm font-bold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl transition cursor-pointer"

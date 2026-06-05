@@ -160,7 +160,7 @@ export default function Results() {
   }
 
   // Pre-fill WhatsApp messages for different conversion CTAs
-  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "966500000000";
+  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "966554060424";
   const whatsappUrlCV = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
     `السلام عليكم فريق جدير، قمت بتحليل سيرتي الذاتية لمهنة (${lead?.targetJob || ""}) وأود طلب خدمة تحسين السيرة الذاتية الاحترافية. رقم التقرير: ${id}`
   )}`;

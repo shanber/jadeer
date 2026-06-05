@@ -10,6 +10,7 @@ import LoadingState from "@/components/LoadingState";
 import { ShieldCheck, FileCheck, Search, Award } from "lucide-react";
 
 export default function Home() {
+  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "966554060424";
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [targetJob, setTargetJob] = useState("");
@@ -222,7 +223,7 @@ export default function Home() {
                   </p>
                 </div>
                 <a
-                  href="https://wa.me/966500000000"
+                  href={`https://wa.me/${whatsappNumber}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3 border border-secondary text-secondary hover:bg-secondary/5 font-bold rounded-xl text-sm transition"
@@ -244,7 +245,7 @@ export default function Home() {
                   </p>
                 </div>
                 <a
-                  href="https://wa.me/966500000000"
+                  href={`https://wa.me/${whatsappNumber}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3 bg-secondary text-white hover:bg-secondary/90 font-bold rounded-xl text-sm shadow-md transition"
@@ -263,7 +264,7 @@ export default function Home() {
                   </p>
                 </div>
                 <a
-                  href="https://wa.me/966500000000"
+                  href={`https://wa.me/${whatsappNumber}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3 border border-secondary text-secondary hover:bg-secondary/5 font-bold rounded-xl text-sm transition"
