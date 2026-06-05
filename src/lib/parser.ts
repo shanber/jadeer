@@ -1,6 +1,3 @@
-const pdfParse = require("pdf-parse");
-import mammoth from "mammoth";
-
 /**
  * Server-side utility to extract text content from uploaded files.
  * Supports PDF (application/pdf) and DOCX (application/vnd.openxmlformats-officedocument.wordprocessingml.document)
@@ -8,6 +5,7 @@ import mammoth from "mammoth";
 export async function parseResume(buffer: Buffer, mimeType: string): Promise<string> {
   if (mimeType === "application/pdf") {
     try {
+      const pdfParse = require("pdf-parse");
       const data = await pdfParse(buffer);
       if (!data || !data.text) {
         throw new Error("Empty PDF content extracted");
@@ -28,6 +26,7 @@ export async function parseResume(buffer: Buffer, mimeType: string): Promise<str
     mimeType === "application/msword"
   ) {
     try {
+      const mammoth = require("mammoth");
       const result = await mammoth.extractRawText({ buffer });
       if (!result || !result.value) {
         throw new Error("Empty DOCX content extracted");

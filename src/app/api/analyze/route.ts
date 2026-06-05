@@ -21,6 +21,7 @@ async function updateLead(id: string, data: any): Promise<void> {
 }
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   let createdLeadId = "";

@@ -40,7 +40,7 @@ export async function analyzeResumeWithAI(
 ): Promise<AnalysisResult> {
   if (!hasApiKey || !genAI) {
     console.log("No GEMINI_API_KEY detected. Running local high-fidelity simulation...");
-    await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate AI delay
+    await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate AI delay
     return generateHighFidelityMockAnalysis(targetJob, jobDescription);
   }
 
